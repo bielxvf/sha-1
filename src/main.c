@@ -4,10 +4,10 @@
 #include <stdint.h>
 
 /* The eighty constants */
-int32_t K0_19 = 0x5a827999;
-int32_t K20_39 = 0x6ed9eba1;
-int32_t K40_59 = 0x8f1bbcdc;
-int32_t K60_79 = 0xca62c1d6;
+uint32_t K0_19  = 0x5a827999;
+uint32_t K20_39 = 0x6ed9eba1;
+uint32_t K40_59 = 0x8f1bbcdc;
+uint32_t K60_79 = 0xca62c1d6;
 
 /* Initial hash values */
 uint32_t h0_0 = 0x67452301;
@@ -23,10 +23,13 @@ typedef struct {
     uint64_t len;
 } BitStream;
 
-void BitStream_append_bit(BitStream *bs, uint32_t bit) {
-    if (bs->len >= BITSTREAM_MAX_BYTES * 8) return;
-    size_t byte_index = bs->len / 8;
-    size_t bit_index = 7 - (bs->len % 8);
+static inline
+void 
+BitStream_append_bit(BitStream *bs, uint32_t bit)
+{
+    if (bs->len >= BITSTREAM_MAX_BYTES * 8 * sizeof(*bs->data)) return;
+    size_t byte_index = bs->len / (8 * sizeof(*bs->data));
+    size_t bit_index = 7 - (bs->len % (8 * sizeof(*bs->data)));
     if (bit)
         bs->data[byte_index] |= (1 << bit_index);
     else
@@ -35,23 +38,37 @@ void BitStream_append_bit(BitStream *bs, uint32_t bit) {
 }
 
 /* SHA-1 functions */
-uint32_t leftrotate(uint32_t value, uint32_t count) {
+static inline
+uint32_t
+leftrotate(uint32_t value, uint32_t count)
+{
     return (value << count) | (value >> (32 - count));
 }
 
-int32_t Ch(int32_t x, int32_t y, int32_t z) {
+static inline
+int32_t
+Ch(int32_t x, int32_t y, int32_t z)
+{
     return (x & y) ^ ((~x) & z);
 }
 
-int32_t Parity(int32_t x, int32_t y, int32_t z) {
+static inline
+int32_t
+Parity(int32_t x, int32_t y, int32_t z)
+{
     return x ^ y ^ z;
 }
 
-int32_t Maj(int32_t x, int32_t y, int32_t z) {
+static inline
+int32_t
+Maj(int32_t x, int32_t y, int32_t z)
+{
     return (x & y) ^ (x & z) ^ (y & z);
 }
 
-int main(int argc, char **argv) {
+int
+main(int argc, char **argv)
+{
     BitStream bs = {0};
 
     /* TODO: arguments, help, etc */
@@ -73,12 +90,12 @@ int main(int argc, char **argv) {
         BitStream_append_bit(&bs, (l >> i) & 1);
     }
 
-    /* For every 512-bit block (M) */
+    /* For every 512-bit block (M) in the input BitStream */
     for (size_t offset = 0; offset < bs.len; offset += 512) {
         uint32_t W[80] = {0}; /* Message schedule */
         /* 6.1.2.1 Prepare the message schedule */
         for (int i = 0; i < 16; i++) {
-            /* Get the words from our BitStream into the Message schedule */
+            /* Get the word from our BitStream into the Message schedule */
             uint32_t word = 0;
             for (int j = 0; j < 4; j++) {
                 size_t bit_index = offset + (i * 32) + (j * 8);
