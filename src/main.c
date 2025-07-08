@@ -1,3 +1,6 @@
+/* SHA-1 implementation for learning purposes */
+/* https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf */
+
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -28,21 +31,21 @@ void
 BitStream_append_bit(BitStream *bs, uint32_t bit)
 {
     if (bs->len >= BITSTREAM_MAX_BYTES * 8 * sizeof(*bs->data)) return;
-    size_t byte_index = bs->len / (8 * sizeof(*bs->data));
+    size_t item_index = bs->len / (8 * sizeof(*bs->data));
     size_t bit_index = 7 - (bs->len % (8 * sizeof(*bs->data)));
     if (bit)
-        bs->data[byte_index] |= (1 << bit_index);
+        bs->data[item_index] |= (1 << bit_index);
     else
-        bs->data[byte_index] &= ~(1 << bit_index);
+        bs->data[item_index] &= ~(1 << bit_index);
     bs->len++;
 }
 
 /* SHA-1 functions */
 static inline
 uint32_t
-leftrotate(uint32_t value, uint32_t count)
+rotr(uint32_t value, uint32_t count)
 {
-    return (value << count) | (value >> (32 - count));
+    return (value << count) | (value >> (8 * sizeof(value) - count));
 }
 
 static inline
@@ -74,22 +77,28 @@ main(int argc, char **argv)
     /* TODO: arguments, help, etc */
 
     /* Stdin reading */
-    int c;
-    while ((c = getchar()) != EOF) {
-        for (int i = 7; i >= 0; i--) {
-            BitStream_append_bit(&bs, (c >> i) & 1);
+    {
+        int c;
+        while ((c = getchar()) != EOF) {
+            for (int i = 7; i >= 0; i--) {
+                BitStream_append_bit(&bs, (c >> i) & 1);
+            }
         }
     }
 
-    uint64_t l = bs.len;
-    BitStream_append_bit(&bs, 1);
-    while ((bs.len % 512) != 448) {
-        BitStream_append_bit(&bs, 0);
-    }
-    for (int8_t i = 63; i >= 0; i--) {
-        BitStream_append_bit(&bs, (l >> i) & 1);
+    /* 5.1.1 Padding */
+    {
+        uint64_t l = bs.len;
+        BitStream_append_bit(&bs, 1);
+        while ((bs.len % 512) != 448) {
+            BitStream_append_bit(&bs, 0);
+        }
+        for (int8_t i = 63; i >= 0; i--) {
+            BitStream_append_bit(&bs, (l >> i) & 1);
+        }
     }
 
+    /* 5.2.1 Parsing */
     /* For every 512-bit block (M) in the input BitStream */
     for (size_t offset = 0; offset < bs.len; offset += 512) {
         uint32_t W[80] = {0}; /* Message schedule */
@@ -112,7 +121,7 @@ main(int argc, char **argv)
 
         /* 6.1.2.1 Prepare the message schedule */
         for (int t = 16; t < 80; t++) {
-            W[t] = leftrotate(W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16], 1);
+            W[t] = rotr(W[t - 3] ^ W[t - 8] ^ W[t - 14] ^ W[t - 16], 1);
         }
 
         /* 6.1.2.2 Initialize the five working variables */
@@ -135,10 +144,10 @@ main(int argc, char **argv)
                 k = K60_79; 
             }
 
-            uint32_t temp = leftrotate(a, 5) + f + e + k + W[t];
+            uint32_t temp = rotr(a, 5) + f + e + k + W[t];
             e = d;
             d = c;
-            c = leftrotate(b, 30);
+            c = rotr(b, 30);
             b = a;
             a = temp;
         }
